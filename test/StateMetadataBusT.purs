@@ -5,7 +5,6 @@ module Test.StateMetadataBusT
 import Prelude
 
 import Control.Monad.Free (Free)
-import Control.Monad.Trans.Class (lift)
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..))
@@ -132,7 +131,7 @@ mainTest = do
 
     raiseBusData testBusM <* expectData "metadata bus 1"
 
-    (lift $ S.subscribe testBusRefS (mapperS "state bus 1")) >>= expect Nothing
+    S.subscribe testBusRefS (mapperS "state bus 1") >>= expect Nothing
     testBusS <- createTestBusS <* expectState "state bus 1" 0
 
     raiseBusMessage testBusS <* expectMessage "state bus 1"
@@ -242,9 +241,6 @@ testBusRef2M = M.busRef $ atom "TestBus2"
 
 testBusRefS :: TestBusRefS
 testBusRefS = S.busRef "TestBus"
-
-testBusRef2S :: S.BusRef Atom TestBusMsg TestBusState
-testBusRef2S = S.busRef $ atom "TestBus2"
 
 expect :: forall a m. MonadEffect m => Eq a => Show a => a -> a -> m Unit
 expect a b = liftEffect $ expect' a b

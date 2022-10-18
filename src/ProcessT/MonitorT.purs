@@ -1,17 +1,11 @@
 module Erl.ProcessT.MonitorT
-  ( MonitorInfo
-  , MonitorMap
-  , MonitorMsg(..)
-  , MonitorObject
-  , MonitorRef
+  ( MonitorMap
   , MonitorT
-  , MonitorType
-  , demonitor
-  , monitor
   , spawnLinkMonitor
   , spawnLinkMonitor'
   , spawnMonitor
   , spawnMonitor'
+  , module ReExports
   ) where
 
 import Prelude
@@ -28,10 +22,15 @@ import Erl.Data.Map as Map
 import Erl.Process (class HasSelf, Process, self)
 import Erl.Process.Raw (class HasPid, getPid)
 import Erl.Process.Raw as Raw
+import Erl.ProcessT (spawn, spawn', spawnLink, spawnLink')
+import Erl.ProcessT.BusT.Class (class BusM)
+import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM)
+import Erl.ProcessT.BusT.StateBusT.Class (class StateBusM)
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.MonitorT.Class (class MonitorM, MonitorInfo, MonitorMsg(..), MonitorObject, MonitorRef, MonitorType(..), demonitor, monitor) as ReExports
+import Erl.ProcessT.MonitorT.Class (class MonitorM, MonitorMsg(..), MonitorRef, monitor)
 import Foreign (Foreign)
 import Partial.Unsafe (unsafeCrashWith)
-import Erl.ProcessT (spawn, spawn', spawnLink, spawnLink')
-import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
 import Type.Prelude (Proxy(..))
 
 newtype MonitorT monitorMsg m a = MonitorT (StateT (MonitorMap monitorMsg) m a)
@@ -45,24 +44,12 @@ derive newtype instance Monad m => Monad (MonitorT monitorMsg m)
 derive newtype instance MonadEffect m => MonadEffect (MonitorT monitorMsg m)
 derive newtype instance MonadTrans (MonitorT monitorMsg)
 
+derive newtype instance BusM otherMsg m => BusM otherMsg (MonitorT msg m)
+derive newtype instance StateBusM otherMsg m => StateBusM otherMsg (MonitorT msg m)
+derive newtype instance MetadataBusM otherMsg m => MetadataBusM otherMsg (MonitorT msg m)
+
 instance (HasSelf m msg, Monad m) => HasSelf (MonitorT monitorMsg m) msg where
   self = lift self
-
-type MonitorObject = Foreign
-
--- | The 'reason' for the monitor being invoked, if this needs unpacking
--- | then FFI will need to be written
-type MonitorInfo = Foreign
-
--- | The type of monitor this message is being sent on behalf
-data MonitorType
-  = Process
-  | Port
-
-data MonitorMsg = Down MonitorRef MonitorType MonitorObject MonitorInfo
-
--- | Reference to a monitor, used to stop the monitor once it is started
-foreign import data MonitorRef :: Type
 
 type MonitorMap msg = Map MonitorRef (MonitorMsg -> msg)
 
@@ -107,69 +94,67 @@ instance MonadProcessHandled m handledMsg => MonadProcessHandled (MonitorT monit
 --------------------------------------------------------------------------------
 -- Public API
 --------------------------------------------------------------------------------
-monitor
-  :: forall monitorMsg m pid
-   . MonadEffect m
-  => HasPid pid
-  => pid
-  -> (MonitorMsg -> monitorMsg)
-  -> MonitorT monitorMsg m MonitorRef
-monitor pid mapper = do
-  MonitorT do
-    ref <- liftEffect $ monitorImpl $ getPid pid
-    modify_ \mm -> Map.insert ref mapper mm
-    pure ref
+instance MonadEffect m => MonitorM monitorMsg (MonitorT monitorMsg m) where
+  monitor
+    :: forall pid
+    . HasPid pid
+    => pid
+    -> (MonitorMsg -> monitorMsg)
+    -> MonitorT monitorMsg m MonitorRef
+  monitor pid mapper = do
+    MonitorT do
+      ref <- liftEffect $ monitorImpl $ getPid pid
+      modify_ \mm -> Map.insert ref mapper mm
+      pure ref
 
-demonitor
-  :: forall monitorMsg m
-   . MonadEffect m
-  => MonitorRef
-  -> MonitorT monitorMsg m Unit
-demonitor ref = do
-  MonitorT do
-    liftEffect $ demonitorImpl ref
-    modify_ \mm -> Map.delete ref mm
+  demonitor
+    :: MonitorRef
+    -> MonitorT monitorMsg m Unit
+  demonitor ref = do
+    MonitorT do
+      liftEffect $ demonitorImpl ref
+      modify_ \mm -> Map.delete ref mm
 
 spawnMonitor
   :: forall m mState msg outMsg m2 monitorMsg
    . MonadProcessHandled m outMsg
   => MonadProcessRun Effect m mState msg outMsg
-  => MonadEffect m2
+  => MonitorM monitorMsg m2
   => m Unit
   -> (MonitorMsg -> monitorMsg)
-  -> MonitorT monitorMsg m2 (Process msg)
+  -> m2 (Process msg)
 spawnMonitor = doSpawnMonitor spawn
 
 spawnLinkMonitor
   :: forall m mState msg outMsg m2 monitorMsg
    . MonadProcessHandled m outMsg
   => MonadProcessRun Effect m mState msg outMsg
-  => MonadEffect m2
+  => MonitorM monitorMsg m2
   => m Unit
   -> (MonitorMsg -> monitorMsg)
-  -> MonitorT monitorMsg m2 (Process msg)
+  -> m2 (Process msg)
 spawnLinkMonitor = doSpawnMonitor spawnLink
 
 spawnMonitor'
   :: forall base m mState msg outMsg m2 monitorMsg
    . MonadProcessHandled m outMsg
   => MonadProcessRun base m mState msg outMsg
-  => MonadEffect m2
+  => MonitorM monitorMsg m2
   => (base ~> Effect)
   -> m Unit
   -> (MonitorMsg -> monitorMsg)
-  -> MonitorT monitorMsg m2 (Process msg)
+  -> m2 (Process msg)
 spawnMonitor' runBase = doSpawnMonitor (spawn' runBase)
 
 spawnLinkMonitor'
   :: forall base m mState msg outMsg m2 monitorMsg
    . MonadProcessHandled m outMsg
   => MonadProcessRun base m mState msg outMsg
-  => MonadEffect m2
+  => MonitorM monitorMsg m2
   => (base ~> Effect)
   -> m Unit
   -> (MonitorMsg -> monitorMsg)
-  -> MonitorT monitorMsg m2 (Process msg)
+  -> m2 (Process msg)
 spawnLinkMonitor' runBase = doSpawnMonitor (spawnLink' runBase)
 
 -- TODO - consider modelling the erlang capabilities around  alias, reply_demonitor, user defined tags etc
@@ -179,11 +164,11 @@ spawnLinkMonitor' runBase = doSpawnMonitor (spawnLink' runBase)
 --------------------------------------------------------------------------------
 doSpawnMonitor
   :: forall m msg m2 monitorMsg
-   . MonadEffect m2
+   . MonitorM monitorMsg m2
   => (m -> Effect (Process msg))
   -> m
   -> (MonitorMsg -> monitorMsg)
-  -> MonitorT monitorMsg m2 (Process msg)
+  -> m2 (Process msg)
 doSpawnMonitor spawner m mapper = do
   pid <- liftEffect $ spawner m
   void $ monitor pid mapper

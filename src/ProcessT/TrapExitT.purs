@@ -12,8 +12,12 @@ import Data.Maybe (Maybe(..))
 import Effect.Class (class MonadEffect, liftEffect)
 import Erl.Process (class HasSelf, self)
 import Erl.Process.Raw (setProcessFlagTrapExit, Pid)
-import Foreign (Foreign)
+import Erl.ProcessT.BusT.Class (class BusM)
+import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM)
+import Erl.ProcessT.BusT.StateBusT.Class (class StateBusM)
 import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.MonitorT.Class (class MonitorM)
+import Foreign (Foreign)
 import Type.Prelude (Proxy(..))
 
 
@@ -32,6 +36,11 @@ derive newtype instance Monad m => Monad (TrapExitT m)
 
 derive newtype instance MonadEffect m => MonadEffect (TrapExitT m)
 derive newtype instance MonadTrans TrapExitT
+
+derive newtype instance MonitorM otherMsg m => MonitorM otherMsg (TrapExitT m)
+derive newtype instance BusM otherMsg m => BusM otherMsg (TrapExitT m)
+derive newtype instance StateBusM otherMsg m => StateBusM otherMsg (TrapExitT m)
+derive newtype instance MetadataBusM otherMsg m => MetadataBusM otherMsg (TrapExitT m)
 
 instance (HasSelf m msg, Monad m) => HasSelf (TrapExitT m) msg where
   self = lift self

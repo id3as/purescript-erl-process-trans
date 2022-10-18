@@ -1,16 +1,11 @@
 module Erl.ProcessT.BusT.MetadataBusT
-  ( Bus
-  , BusMsg(..)
-  , BusRef
-  , MetadataBusT
+  ( MetadataBusT
   , MetadataBusInternal
-  , busRef
   , create
   , delete
   , raise
-  , subscribe
-  , unsubscribe
   , updateMetadata
+  , module ReExports
   )
   where
 
@@ -28,27 +23,16 @@ import Erl.Data.Map as Map
 import Erl.Data.Tuple (Tuple2, Tuple3, tuple2, uncurry2, uncurry3)
 import Erl.Kernel.Erlang (monotonicTime)
 import Erl.Process (class HasSelf, self)
+import Erl.ProcessT.BusT.Class (class BusM)
+import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM, Bus(..), BusMsg(..), BusRef(..), busRef, subscribe, unsubscribe) as ReExports
+import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM, Bus, BusMsg(..), BusRef(..))
+import Erl.ProcessT.BusT.StateBusT.Class (class StateBusM)
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.MonitorT.Class (class MonitorM)
 import Erl.Types (MonotonicTime)
 import Foreign (Foreign)
-import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
-
-newtype Bus :: Type -> Type -> Type -> Type
-newtype Bus name msg metadata = Bus name
-
-instance Show name => Show (Bus name msg metadata) where
-  show (Bus name) = "Bus " <> show name
-
-newtype BusRef :: Type -> Type -> Type -> Type
-newtype BusRef name msg metadata = BusRef name
-
-derive newtype instance Eq name => Eq (BusRef name msg metadata)
-derive newtype instance Ord name => Ord (BusRef name msg metadata)
-derive newtype instance Show name => Show (BusRef name msg metadata)
-
-busRef :: forall name msg metadata. name -> BusRef name msg metadata
-busRef = BusRef
 
 newtype Generation = Generation (Tuple2 MonotonicTime Int)
 
@@ -67,17 +51,6 @@ data BusMsgInternal msg metadata
   = DataMsgInternal Generation msg
   | MetadataMsgInternal Generation metadata
   | BusTerminatedInternal Generation
-
-data BusMsg msg metadata
-  = DataMsg msg
-  | MetadataMsg metadata
-  | BusTerminated
-
-derive instance (Eq msg, Eq metadata) => Eq (BusMsg msg metadata)
-instance (Show msg, Show metadata) => Show (BusMsg msg metadata) where
-  show (DataMsg msg) = "DataMsg " <> show msg
-  show (MetadataMsg metadata) = "MetadataMsg " <> show metadata
-  show BusTerminated = "BusTerminated"
 
 foreign import data BusNameForeign :: Type
 foreign import data BusDataForeign :: Type
@@ -101,6 +74,10 @@ derive newtype instance Monad m => Monad (MetadataBusT msg m)
 
 derive newtype instance MonadEffect m => MonadEffect (MetadataBusT msg m)
 derive newtype instance MonadTrans (MetadataBusT msg)
+
+derive newtype instance MonitorM otherMsg m => MonitorM otherMsg (MetadataBusT msg m)
+derive newtype instance BusM otherMsg m => BusM otherMsg (MetadataBusT msg m)
+derive newtype instance StateBusM otherMsg m => StateBusM otherMsg (MetadataBusT msg m)
 
 --------------------------------------------------------------------------------
 -- Public API
@@ -137,33 +114,32 @@ foreign import subscribeImpl :: forall name msg metadata. BusRef name msg metada
 foreign import unsubscribeImpl :: forall name msg metadata. Maybe MetadataBusMonitorRef -> BusRef name msg metadata -> Effect Unit
 foreign import monitorImpl :: MetadataBusPid -> BusNameForeign -> Effect MetadataBusMonitorRef
 
-subscribe
-  :: forall name busMsgIn busMetadataIn msgOut m
-   . MonadEffect m
-  => BusRef name busMsgIn busMetadataIn
-  -> (BusMsg busMsgIn busMetadataIn -> msgOut)
-  -> MetadataBusT msgOut m (Maybe busMetadataIn)
-subscribe bus mapper =
-  MetadataBusT do
-    resp <- liftEffect $ subscribeImpl bus
-    case resp of
-      Nothing -> do
-        modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Nothing, monitorRef: Nothing } mm)
-        pure Nothing
-      Just genMetadataPidRef -> genMetadataPidRef # uncurry3 \gen metadata ref -> do
-        modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Just gen, monitorRef: Just ref } mm)
-        pure $ Just $ metadata
+instance MonadEffect m => MetadataBusM msgOut (MetadataBusT msgOut m) where
+  subscribe
+    :: forall name busMsgIn busMetadataIn
+    .  BusRef name busMsgIn busMetadataIn
+    -> (BusMsg busMsgIn busMetadataIn -> msgOut)
+    -> MetadataBusT msgOut m (Maybe busMetadataIn)
+  subscribe bus mapper =
+    MetadataBusT do
+      resp <- liftEffect $ subscribeImpl bus
+      case resp of
+        Nothing -> do
+          modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Nothing, monitorRef: Nothing } mm)
+          pure Nothing
+        Just genMetadataPidRef -> genMetadataPidRef # uncurry3 \gen metadata ref -> do
+          modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Just gen, monitorRef: Just ref } mm)
+          pure $ Just $ metadata
 
-unsubscribe
-  :: forall name busMsgIn busMetadata msgOut m
-   . MonadEffect m
-  => BusRef name busMsgIn busMetadata
-  -> MetadataBusT msgOut m Unit
-unsubscribe bus =
-  MetadataBusT do
-    maybeRef <- gets \(MetadataBusInternal mm) -> Map.lookup (toBusNameForeign bus) mm >>= _.monitorRef
-    modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.delete (toBusNameForeign bus) mm)
-    liftEffect $ unsubscribeImpl maybeRef bus
+  unsubscribe
+    :: forall name busMsgIn busMetadata
+    .  BusRef name busMsgIn busMetadata
+    -> MetadataBusT msgOut m Unit
+  unsubscribe bus =
+    MetadataBusT do
+      maybeRef <- gets \(MetadataBusInternal mm) -> Map.lookup (toBusNameForeign bus) mm >>= _.monitorRef
+      modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.delete (toBusNameForeign bus) mm)
+      liftEffect $ unsubscribeImpl maybeRef bus
 
 foreign import parseBusMsg :: Foreign -> Maybe (Either (Tuple3 BusNameForeign (BusMsgInternal BusDataForeign BusMetadataForeign) MetadataBusPid) BusNameForeign)
 

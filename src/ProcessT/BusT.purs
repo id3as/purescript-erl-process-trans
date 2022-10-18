@@ -1,13 +1,10 @@
 module Erl.ProcessT.BusT
-  ( Bus
-  , BusMap
+  ( BusMap
   , BusMsgForeign
   , BusNameForeign
   , BusT
-  , bus
   , raise
-  , subscribe
-  , unsubscribe
+  , module ReExports
   )
   where
 
@@ -24,8 +21,13 @@ import Erl.Data.Map (Map)
 import Erl.Data.Map as Map
 import Erl.Data.Tuple (Tuple2, fst, snd)
 import Erl.Process (class HasSelf, self)
-import Foreign (Foreign)
+import Erl.ProcessT.BusT.Class (class BusM, Bus)
+import Erl.ProcessT.BusT.Class (class BusM, Bus, bus, subscribe, unsubscribe) as ReExports
+import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM)
+import Erl.ProcessT.BusT.StateBusT.Class (class StateBusM)
 import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.MonitorT.Class (class MonitorM)
+import Foreign (Foreign)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -45,37 +47,34 @@ derive newtype instance Monad m => Monad (BusT busMsg m)
 derive newtype instance MonadEffect m => MonadEffect (BusT busMsg m)
 derive newtype instance MonadTrans (BusT busMsg)
 
-newtype Bus :: Type -> Type -> Type
-newtype Bus name msg = Bus name
+derive newtype instance MonitorM otherMsg m => MonitorM otherMsg (BusT msg m)
+derive newtype instance StateBusM otherMsg m => StateBusM otherMsg (BusT msg m)
+derive newtype instance MetadataBusM otherMsg m => MetadataBusM otherMsg (BusT msg m)
 
 --------------------------------------------------------------------------------
 -- Public API
 --------------------------------------------------------------------------------
 foreign import raise :: forall name msg. Bus name msg -> msg -> Effect Unit
 
-subscribe
-  :: forall name busMsgIn busMsgOut m
-   . MonadEffect m
-  => Bus name busMsgIn
-  -> (busMsgIn -> busMsgOut)
-  -> BusT busMsgOut m Unit
-subscribe bus mapper =
-  BusT do
-    modify_ \mm -> Map.insert (toBusNameForeign bus) (toMapperForeign mapper) mm
-    liftEffect $ subscribeImpl bus
+instance MonadEffect m => BusM busMsgOut (BusT busMsgOut m) where
+  subscribe
+    :: forall name busMsgIn
+    .  Bus name busMsgIn
+    -> (busMsgIn -> busMsgOut)
+    -> BusT busMsgOut m Unit
+  subscribe bus mapper =
+    BusT do
+      modify_ \mm -> Map.insert (toBusNameForeign bus) (toMapperForeign mapper) mm
+      liftEffect $ subscribeImpl bus
 
-unsubscribe
-  :: forall name busMsgIn busMsgOut m
-   . MonadEffect m
-  => Bus name busMsgIn
-  -> BusT busMsgOut m Unit
-unsubscribe bus =
-  BusT do
-    modify_ \mm -> Map.delete (toBusNameForeign bus) mm
-    liftEffect $ unsubscribeImpl bus
-
-bus :: forall msg name. name -> Bus name msg
-bus = Bus
+  unsubscribe
+    :: forall name busMsgIn
+    .  Bus name busMsgIn
+    -> BusT busMsgOut m Unit
+  unsubscribe bus =
+    BusT do
+      modify_ \mm -> Map.delete (toBusNameForeign bus) mm
+      liftEffect $ unsubscribeImpl bus
 
 --------------------------------------------------------------------------------
 -- Internal
