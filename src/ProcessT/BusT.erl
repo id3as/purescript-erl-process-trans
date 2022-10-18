@@ -1,4 +1,4 @@
--module(pinto_processT_busT@foreign).
+-module(erl_processT_busT@foreign).
 
 -export([ parseBusMsg/1
         , raise/2

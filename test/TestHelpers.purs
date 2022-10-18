@@ -8,7 +8,7 @@ import Prelude
 import Control.Monad.Free (Free)
 import Effect (Effect)
 import Erl.Test.EUnit (TestF, test)
-import Pinto.ProcessT (class MonadProcessHandled, class MonadProcessRun, unsafeEvalProcess)
+import Erl.ProcessT (class MonadProcessHandled, class MonadProcessRun, unsafeEvalProcess)
 
 mpTest
   :: forall m mState appMsg parsedMsg

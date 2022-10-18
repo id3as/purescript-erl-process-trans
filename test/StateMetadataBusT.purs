@@ -18,11 +18,11 @@ import Erl.Atom (Atom, atom)
 import Erl.Process (Process, self, (!))
 import Erl.Test.EUnit (TestF, suite)
 import Partial.Unsafe (unsafeCrashWith)
-import Pinto.ProcessT (class MonadProcessHandled, class MonadProcessTrans, ProcessTM, ProcessM, receive, receiveWithTimeout, spawn)
-import Pinto.ProcessT.BusT.MetadataBusT (MetadataBusT)
-import Pinto.ProcessT.BusT.MetadataBusT as M
-import Pinto.ProcessT.BusT.StateBusT (class UpdateState, StateBusT)
-import Pinto.ProcessT.BusT.StateBusT as S
+import Erl.ProcessT (class MonadProcessHandled, class MonadProcessTrans, ProcessTM, ProcessM, receive, receiveWithTimeout, spawn)
+import Erl.ProcessT.BusT.MetadataBusT (MetadataBusT)
+import Erl.ProcessT.BusT.MetadataBusT as M
+import Erl.ProcessT.BusT.StateBusT (class UpdateState, StateBusT)
+import Erl.ProcessT.BusT.StateBusT as S
 import Test.Assert (assertEqual)
 import Test.TestHelpers (mpTest)
 

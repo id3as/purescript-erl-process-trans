@@ -1,4 +1,4 @@
-module Pinto.ProcessT.Internal.Types
+module Erl.ProcessT.Internal.Types
   ( ProcessM
   , ProcessTM
   , class MonadProcessHandled

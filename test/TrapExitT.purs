@@ -7,8 +7,8 @@ import Data.Either (Either(..))
 import Effect.Class (liftEffect)
 import Erl.Test.EUnit (TestF, suite)
 import Partial.Unsafe (unsafeCrashWith)
-import Pinto.ProcessT (ProcessTM, ProcessM, receive, spawnLink)
-import Pinto.ProcessT.TrapExitT (TrapExitT)
+import Erl.ProcessT (ProcessTM, ProcessM, receive, spawnLink)
+import Erl.ProcessT.TrapExitT (TrapExitT)
 import Test.TestHelpers (mpTest)
 
 data TestAppMsg = TestAppMsg

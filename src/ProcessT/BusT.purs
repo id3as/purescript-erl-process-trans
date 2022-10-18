@@ -1,4 +1,4 @@
-module Pinto.ProcessT.BusT
+module Erl.ProcessT.BusT
   ( Bus
   , BusMap
   , BusMsgForeign
@@ -25,7 +25,7 @@ import Erl.Data.Map as Map
 import Erl.Data.Tuple (Tuple2, fst, snd)
 import Erl.Process (class HasSelf, self)
 import Foreign (Foreign)
-import Pinto.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 

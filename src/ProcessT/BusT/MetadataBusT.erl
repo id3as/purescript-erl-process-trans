@@ -1,4 +1,4 @@
--module(pinto_processT_busT_metadataBusT@foreign).
+-module(erl_processT_busT_metadataBusT@foreign).
 
 -export([ createImpl/3
         , deleteImpl/2

@@ -1,4 +1,4 @@
--module(pinto_processT_trapExitT@foreign).
+-module(erl_processT_trapExitT@foreign).
 
 -export([ parseTrappedExitFFI/2
         ]).

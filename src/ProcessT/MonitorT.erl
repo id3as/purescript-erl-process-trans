@@ -1,4 +1,4 @@
--module(pinto_processT_monitorT@foreign).
+-module(erl_processT_monitorT@foreign).
 
 -export([ parseMonitorMsg/1
         , monitorImpl/1

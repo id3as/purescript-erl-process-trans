@@ -1,4 +1,4 @@
-module Pinto.ProcessT.TrapExitT
+module Erl.ProcessT.TrapExitT
   ( TrapExitT
   , ExitMessage(..)
   ) where
@@ -13,7 +13,7 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Erl.Process (class HasSelf, self)
 import Erl.Process.Raw (setProcessFlagTrapExit, Pid)
 import Foreign (Foreign)
-import Pinto.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
 import Type.Prelude (Proxy(..))
 
 

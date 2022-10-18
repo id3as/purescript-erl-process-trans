@@ -1,4 +1,4 @@
-module Pinto.ProcessT.BusT.MetadataBusT
+module Erl.ProcessT.BusT.MetadataBusT
   ( Bus
   , BusMsg(..)
   , BusRef
@@ -30,7 +30,7 @@ import Erl.Kernel.Erlang (monotonicTime)
 import Erl.Process (class HasSelf, self)
 import Erl.Types (MonotonicTime)
 import Foreign (Foreign)
-import Pinto.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 

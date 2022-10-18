@@ -1,4 +1,4 @@
-module Pinto.ProcessT
+module Erl.ProcessT
   ( Timeout(..)
   , receive
   , receiveWithTimeout
@@ -24,8 +24,8 @@ import Erl.Kernel.Time (milliseconds)
 import Erl.Process (Process)
 import Erl.Process.Raw as Raw
 import Foreign (unsafeToForeign)
-import Pinto.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
-import Pinto.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, ProcessM, ProcessTM) as ReExports
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, ProcessM, ProcessTM) as ReExports
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 

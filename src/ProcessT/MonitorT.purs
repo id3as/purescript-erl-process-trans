@@ -1,4 +1,4 @@
-module Pinto.ProcessT.MonitorT
+module Erl.ProcessT.MonitorT
   ( MonitorInfo
   , MonitorMap
   , MonitorMsg(..)
@@ -30,8 +30,8 @@ import Erl.Process.Raw (class HasPid, getPid)
 import Erl.Process.Raw as Raw
 import Foreign (Foreign)
 import Partial.Unsafe (unsafeCrashWith)
-import Pinto.ProcessT (spawn, spawn', spawnLink, spawnLink')
-import Pinto.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
+import Erl.ProcessT (spawn, spawn', spawnLink, spawnLink')
+import Erl.ProcessT.Internal.Types (class MonadProcessHandled, class MonadProcessRun, class MonadProcessTrans, initialise, parseForeign, run)
 import Type.Prelude (Proxy(..))
 
 newtype MonitorT monitorMsg m a = MonitorT (StateT (MonitorMap monitorMsg) m a)
