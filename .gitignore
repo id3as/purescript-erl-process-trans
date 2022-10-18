@@ -1,0 +1,9 @@
+.psc-ide-port
+.psc-package/
+.spago/
+output/
+*beam
+tags
+_build
+generated-docs
+erl_crash.dump
