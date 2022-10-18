@@ -8,8 +8,7 @@ module Erl.ProcessT.Internal.Types
   , parseForeign
   , run
   , unsafeRunProcessTM
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -54,6 +53,7 @@ instance TypeEquals userMsg handledMsg => HasReceive (ProcessTM userMsg handledM
 class MonadProcessTrans :: (Type -> Type) -> Type -> Type -> Type -> Constraint
 class (MonadEffect m) <= MonadProcessTrans m mState appMsg outMsg | m -> mState appMsg outMsg where
   parseForeign :: Foreign -> m (Maybe outMsg)
+
 class MonadProcessRun :: (Type -> Type) -> (Type -> Type) -> Type -> Type -> Type -> Constraint
 class (MonadEffect base, MonadProcessTrans m mState appMsg outMsg) <= MonadProcessRun base m mState appMsg outMsg | m -> mState appMsg outMsg where
   run :: forall a. m a -> mState -> base (Tuple a mState)
@@ -61,6 +61,7 @@ class (MonadEffect base, MonadProcessTrans m mState appMsg outMsg) <= MonadProce
 
 instance MonadProcessTrans (ProcessTM appMsg handledMsg) Unit appMsg appMsg where
   parseForeign = pure <<< Just <<< unsafeCoerce
+
 instance (MonadEffect base) => MonadProcessRun base (ProcessTM appMsg handledMsg) Unit appMsg appMsg where
   run pm _ = liftEffect do
     res <- unsafeRunProcessTM pm
@@ -69,6 +70,7 @@ instance (MonadEffect base) => MonadProcessRun base (ProcessTM appMsg handledMsg
 
 instance MonadProcessTrans m mState appMsg outMsg => MonadProcessTrans (IdentityT m) mState appMsg outMsg where
   parseForeign = IdentityT <<< parseForeign
+
 instance MonadProcessRun base m mState appMsg outMsg => MonadProcessRun base (IdentityT m) mState appMsg outMsg where
   run (IdentityT m) = run m
   initialise _ = initialise (Proxy :: Proxy m)

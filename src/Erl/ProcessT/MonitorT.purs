@@ -97,7 +97,7 @@ instance MonadProcessHandled m handledMsg => MonadProcessHandled (MonitorT monit
 instance MonadEffect m => MonitorM monitorMsg (MonitorT monitorMsg m) where
   monitor
     :: forall pid
-    . HasPid pid
+     . HasPid pid
     => pid
     -> (MonitorMsg -> monitorMsg)
     -> MonitorT monitorMsg m MonitorRef

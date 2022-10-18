@@ -5,8 +5,7 @@ module Erl.ProcessT.BusT
   , BusT
   , raise
   , module ReExports
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -59,7 +58,7 @@ foreign import raise :: forall name msg. Bus name msg -> msg -> Effect Unit
 instance MonadEffect m => BusM busMsgOut (BusT busMsgOut m) where
   subscribe
     :: forall name busMsgIn
-    .  Bus name busMsgIn
+     . Bus name busMsgIn
     -> (busMsgIn -> busMsgOut)
     -> BusT busMsgOut m Unit
   subscribe bus mapper =
@@ -69,7 +68,7 @@ instance MonadEffect m => BusM busMsgOut (BusT busMsgOut m) where
 
   unsubscribe
     :: forall name busMsgIn
-    .  Bus name busMsgIn
+     . Bus name busMsgIn
     -> BusT busMsgOut m Unit
   unsubscribe bus =
     BusT do

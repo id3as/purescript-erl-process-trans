@@ -52,13 +52,13 @@ instance (Show msg, Show state) => Show (BusMsg msg state) where
 class MonadEffect m <= StateBusM msgOut m | m -> msgOut where
   subscribe
     :: forall name busMsgIn busStateIn
-    .  BusRef name busMsgIn busStateIn
+     . BusRef name busMsgIn busStateIn
     -> (BusMsg busMsgIn busStateIn -> msgOut)
     -> m (Maybe busStateIn)
 
   unsubscribe
     :: forall name busMsgIn busState
-    .  BusRef name busMsgIn busState
+     . BusRef name busMsgIn busState
     -> m Unit
 
 instance StateBusM msgOut m => StateBusM msgOut (IdentityT m) where

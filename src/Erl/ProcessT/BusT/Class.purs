@@ -23,13 +23,13 @@ newtype Bus name msg = Bus name
 class MonadEffect m <= BusM busMsgOut m | m -> busMsgOut where
   subscribe
     :: forall name busMsgIn
-    . Bus name busMsgIn
+     . Bus name busMsgIn
     -> (busMsgIn -> busMsgOut)
     -> m Unit
 
   unsubscribe
     :: forall name busMsgIn
-    . Bus name busMsgIn
+     . Bus name busMsgIn
     -> m Unit
 
 instance BusM msgOut m => BusM msgOut (IdentityT m) where

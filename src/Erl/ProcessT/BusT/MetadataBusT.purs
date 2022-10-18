@@ -6,8 +6,7 @@ module Erl.ProcessT.BusT.MetadataBusT
   , raise
   , updateMetadata
   , module ReExports
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -57,11 +56,11 @@ foreign import data BusDataForeign :: Type
 foreign import data BusMetadataForeign :: Type
 
 newtype MetadataBusInternal msg = MetadataBusInternal
-  (Map BusNameForeign
-    { generation :: Maybe Generation
-    , monitorRef :: Maybe MetadataBusMonitorRef
-    , mapper :: BusMsg BusDataForeign BusMetadataForeign -> msg
-    }
+  ( Map BusNameForeign
+      { generation :: Maybe Generation
+      , monitorRef :: Maybe MetadataBusMonitorRef
+      , mapper :: BusMsg BusDataForeign BusMetadataForeign -> msg
+      }
   )
 
 newtype MetadataBusT msg m a = MetadataBusT (StateT (MetadataBusInternal msg) m a)
@@ -117,7 +116,7 @@ foreign import monitorImpl :: MetadataBusPid -> BusNameForeign -> Effect Metadat
 instance MonadEffect m => MetadataBusM msgOut (MetadataBusT msgOut m) where
   subscribe
     :: forall name busMsgIn busMetadataIn
-    .  BusRef name busMsgIn busMetadataIn
+     . BusRef name busMsgIn busMetadataIn
     -> (BusMsg busMsgIn busMetadataIn -> msgOut)
     -> MetadataBusT msgOut m (Maybe busMetadataIn)
   subscribe bus mapper =
@@ -133,7 +132,7 @@ instance MonadEffect m => MetadataBusM msgOut (MetadataBusT msgOut m) where
 
   unsubscribe
     :: forall name busMsgIn busMetadata
-    .  BusRef name busMsgIn busMetadata
+     . BusRef name busMsgIn busMetadata
     -> MetadataBusT msgOut m Unit
   unsubscribe bus =
     MetadataBusT do

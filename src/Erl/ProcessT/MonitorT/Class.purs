@@ -10,7 +10,6 @@ import Effect.Class (class MonadEffect)
 import Erl.Process.Raw (class HasPid)
 import Foreign (Foreign)
 
-
 type MonitorObject = Foreign
 
 -- | The 'reason' for the monitor being invoked, if this needs unpacking
@@ -30,7 +29,7 @@ foreign import data MonitorRef :: Type
 class MonadEffect m <= MonitorM monitorMsg m | m -> monitorMsg where
   monitor
     :: forall pid
-    . HasPid pid
+     . HasPid pid
     => pid
     -> (MonitorMsg -> monitorMsg)
     -> m MonitorRef

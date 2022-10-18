@@ -5,8 +5,7 @@ module Erl.ProcessT.BusT.StateBusT
   , delete
   , raise
   , module ReExports
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -56,11 +55,11 @@ foreign import data BusMsgForeign :: Type
 foreign import data BusStateForeign :: Type
 
 newtype StateBusInternal msg = StateBusInternal
-  (Map BusNameForeign
-    { generation :: Maybe Generation
-    , monitorRef :: Maybe StateBusMonitorRef
-    , mapper :: BusMsg BusMsgForeign BusStateForeign -> msg
-    }
+  ( Map BusNameForeign
+      { generation :: Maybe Generation
+      , monitorRef :: Maybe StateBusMonitorRef
+      , mapper :: BusMsg BusMsgForeign BusStateForeign -> msg
+      }
   )
 
 newtype StateBusT msg m a = StateBusT (StateT (StateBusInternal msg) m a)
@@ -119,7 +118,7 @@ foreign import monitorImpl :: StateBusPid -> BusNameForeign -> Effect StateBusMo
 instance MonadEffect m => StateBusM msgOut (StateBusT msgOut m) where
   subscribe
     :: forall name busMsgIn busStateIn
-    .  BusRef name busMsgIn busStateIn
+     . BusRef name busMsgIn busStateIn
     -> (BusMsg busMsgIn busStateIn -> msgOut)
     -> StateBusT msgOut m (Maybe busStateIn)
   subscribe bus mapper =
@@ -135,7 +134,7 @@ instance MonadEffect m => StateBusM msgOut (StateBusT msgOut m) where
 
   unsubscribe
     :: forall name busMsgIn busState
-    .  BusRef name busMsgIn busState
+     . BusRef name busMsgIn busState
     -> StateBusT msgOut m Unit
   unsubscribe bus =
     StateBusT do

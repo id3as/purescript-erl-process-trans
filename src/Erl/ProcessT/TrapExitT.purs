@@ -20,7 +20,6 @@ import Erl.ProcessT.MonitorT.Class (class MonitorM)
 import Foreign (Foreign)
 import Type.Prelude (Proxy(..))
 
-
 data ExitMessage = Exit Pid Foreign
 
 foreign import parseTrappedExitFFI :: Foreign -> (Pid -> Foreign -> ExitMessage) -> Maybe ExitMessage

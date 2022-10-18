@@ -84,7 +84,7 @@ unsafeEvalProcess
    . MonadProcessHandled m parsedMsg
   => MonadProcessRun base m mState appMsg parsedMsg
   => m a
-  -> base  a
+  -> base a
 unsafeEvalProcess mpt =
   fst <$> unsafeRunProcess mpt
 

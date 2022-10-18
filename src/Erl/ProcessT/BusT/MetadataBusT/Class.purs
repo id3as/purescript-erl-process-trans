@@ -40,13 +40,13 @@ instance (Show msg, Show metadata) => Show (BusMsg msg metadata) where
 class MonadEffect m <= MetadataBusM msgOut m | m -> msgOut where
   subscribe
     :: forall name busMsgIn busMetadataIn
-    .  BusRef name busMsgIn busMetadataIn
+     . BusRef name busMsgIn busMetadataIn
     -> (BusMsg busMsgIn busMetadataIn -> msgOut)
     -> m (Maybe busMetadataIn)
 
   unsubscribe
     :: forall name busMsgIn busMetadata
-    .  BusRef name busMsgIn busMetadata
+     . BusRef name busMsgIn busMetadata
     -> m Unit
 
 instance MetadataBusM msgOut m => MetadataBusM msgOut (IdentityT m) where
