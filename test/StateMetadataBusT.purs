@@ -248,7 +248,7 @@ expect a b = liftEffect $ expect' a b
 expect' :: forall a. Eq a => Show a => a -> a -> Effect Unit
 expect' expected actual = assertEqual { actual, expected: expected }
 
-noMoreMessages :: forall m mState appMsg parsedMsg. MonadProcessHandled m parsedMsg => MonadProcessTrans m mState appMsg parsedMsg => MonadEffect m => m Unit
+noMoreMessages :: forall m mState appMsg parsedMsg. Show parsedMsg => MonadProcessHandled m parsedMsg => MonadProcessTrans m mState appMsg parsedMsg => MonadEffect m => m Unit
 noMoreMessages = receiveWithTimeout (Milliseconds 6.0) >>= case _ of
   Left _ -> pure unit
-  Right _ -> unsafeCrashWith "Received unexpected message"
+  Right msg -> unsafeCrashWith $ "Received unexpected message: " <> show msg

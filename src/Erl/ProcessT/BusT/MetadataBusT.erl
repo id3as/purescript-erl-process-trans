@@ -6,6 +6,7 @@
         , updateMetadataImpl/2
         , subscribeImpl/1
         , monitorImpl/2
+        , demonitorImpl/1
         , unsubscribeImpl/2
         , parseBusMsg/1
         ]).
@@ -39,9 +40,9 @@ createImpl(BusName, Generation, InitialMetadata) ->
 deleteImpl(BusName, TerminatedMsg) ->
   fun() ->
       NameKey = ?gprocNameKey(BusName),
-      ?metadataAttribute(Generation, _Metadata) = gproc:get_attribute(NameKey, ?metadataTag),
+      {{Id, Generation}, _Metadata} = gproc:get_attribute(NameKey, ?metadataTag),
       gproc:unreg(?gprocNameKey(BusName)),
-      raiseMsgInt(BusName, TerminatedMsg(Generation)),
+      raiseMsgInt(BusName, TerminatedMsg({Id, Generation + 1})),
       ?unit
   end.
 
@@ -77,7 +78,7 @@ subscribeImpl(BusName) ->
             ?just({Gen, Metadata, Ref})
           catch
             error:badarg ->
-              erlang:demonitor(Ref, [flush]),
+              (demonitorImpl(Ref))(),
               ?nothing
           end
       end
@@ -85,6 +86,9 @@ subscribeImpl(BusName) ->
 
 monitorImpl(Pid, BusName) ->
   fun () -> erlang:monitor(process, Pid, [{tag, {?monitorTag, BusName}}]) end.
+
+demonitorImpl(Ref) ->
+  fun () -> erlang:demonitor(Ref, [flush]) end.
 
 
 % sender exits
@@ -95,7 +99,7 @@ monitorImpl(Pid, BusName) ->
 unsubscribeImpl(MaybeRef, BusName) ->
   fun() ->
       case MaybeRef of
-        ?just(Ref) -> erlang:demonitor(Ref, [flush]);
+        ?just(Ref) -> (demonitorImpl(Ref))();
         ?nothing -> ok
       end,
       gproc:unreg(?gprocPropertyKey(BusName)),

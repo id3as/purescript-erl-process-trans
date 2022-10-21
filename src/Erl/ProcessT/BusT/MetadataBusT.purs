@@ -112,6 +112,7 @@ foreign import data MetadataBusMonitorRef :: Type
 foreign import subscribeImpl :: forall name msg metadata. BusRef name msg metadata -> Effect (Maybe (Tuple3 Generation metadata MetadataBusMonitorRef))
 foreign import unsubscribeImpl :: forall name msg metadata. Maybe MetadataBusMonitorRef -> BusRef name msg metadata -> Effect Unit
 foreign import monitorImpl :: MetadataBusPid -> BusNameForeign -> Effect MetadataBusMonitorRef
+foreign import demonitorImpl :: MetadataBusMonitorRef -> Effect Unit
 
 instance MonadEffect m => MetadataBusM msgOut (MetadataBusT msgOut m) where
   subscribe
@@ -193,6 +194,12 @@ instance
               case toBusMsg generation busMsgInternal of
                 Nothing -> do
                   pure Nothing
+                Just { generation: _, message: busMsg@BusTerminated } -> do
+                  case maybeMonitorRef of
+                    Just monitorRef -> liftEffect $ demonitorImpl monitorRef
+                    Nothing -> pure unit
+                  put $ MetadataBusInternal $ Map.delete busName mtMetadata
+                  pure $ Just $ Left $ mapper busMsg
                 Just { generation: newGeneration, message: busMsg } -> do
                   monitorRef <- case maybeMonitorRef of
                     Just monitorRef -> pure monitorRef

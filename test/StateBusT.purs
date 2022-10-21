@@ -150,8 +150,9 @@ testSenderExits :: Free TestF Unit
 testSenderExits = do
   mpTest "Receive BusTerminated if sender exits (create then subscribe, normal exit)" (theTest ExitNormal)
   mpTest "Receive BusTerminated if sender exits (create then subscribe, crash exit)" (theTest ExitCrash)
+  mpTest "Receive BusTerminated if sender exits (create then subscribe, deletion)" (theTest (DeleteAndAck Ack))
   mpTest "Receive BusTerminated if sender exits (subscribe then create, normal exit)" (theTest2 ExitNormal)
-  mpTest "Receive BusTerminated if sender exits (subscribe then create, deletion)" (theTest2 DeleteAndWait)
+  mpTest "Receive BusTerminated if sender exits (subscribe then create, deletion)" (theTest2 (DeleteAndAck Ack))
   where
 
   theTest :: _ -> StateBusT (BusMsg TestBusMsg TestBusState) (ProcessTM Ack _) Unit
@@ -183,10 +184,17 @@ testSenderExits = do
         pure unit
       Right (Left _) ->
         unsafeCrashWith "Received unexpected message (not BusTerminated)"
-    when (howToExit == DeleteAndWait) do
+    when (howToExit == DeleteAndAck Ack) do
+      receiveWithTimeout (Milliseconds 6.0) >>= case _ of
+        Right (Right Ack) ->
+          pure unit
+        Left Timeout ->
+          unsafeCrashWith "Did not receive acknowledgement (helper thread crashed during delete?)"
+        Right (Left _) ->
+          unsafeCrashWith "Received unexpected bus message (not Ack)"
       liftEffect $ senderPid ! ExitNormal
 
-  theTest2 :: _ -> StateBusT (BusMsg TestBusMsg TestBusState) (ProcessTM Void _) Unit
+  theTest2 :: _ -> StateBusT (BusMsg TestBusMsg TestBusState) (ProcessTM Ack _) Unit
   theTest2 howToExit = do
     let ourTestBus = busRef $ atom "TestingBus"
     me <- self
@@ -206,9 +214,24 @@ testSenderExits = do
         unsafeCrashWith "Did not receive BusTerminated before timeout"
       Right (Left BusTerminated) ->
         pure unit
-      Right _ ->
-        unsafeCrashWith "Received unexpected message (not BusTerminated)"
-    when (howToExit == DeleteAndWait) do
+      Right (Left _) -> do
+        unsafeCrashWith "Received unexpected bus message (not BusTerminated): "
+      Right (Right Ack) -> do
+        receiveWithTimeout (Milliseconds 6.0) >>= case _ of
+          Right (Left BusTerminated) -> do
+            unsafeCrashWith "Received Ack before BusTerminated"
+          Left Timeout -> do
+            unsafeCrashWith "Received Ack and no BusTerminated"
+          Right msg -> do
+            unsafeCrashWith $ "Received Ack and then " <> show msg
+    when (howToExit == DeleteAndAck Ack) do
+      receiveWithTimeout (Milliseconds 6.0) >>= case _ of
+        Right (Right Ack) ->
+          pure unit
+        Left Timeout ->
+          unsafeCrashWith "Did not receive acknowledgement (helper thread crashed during delete?)"
+        Right (Left _) ->
+          unsafeCrashWith "Received unexpected bus message (not Ack)"
       liftEffect $ senderPid ! ExitNormal
 
 {-
@@ -337,17 +360,17 @@ derive instance Eq Ack
 instance Show Ack where
   show Ack = "Ack"
 
-data HelperMsg
+data HelperMsg ack
   = CreateBus TestBusState
   | RaiseMessage TestBusMsg
-  | DeleteAndWait
+  | DeleteAndAck ack
   | DeleteAndExit
   | ExitNormal
   | ExitCrash
 
-derive instance Eq HelperMsg
+derive instance Eq ack => Eq (HelperMsg ack)
 
-testBusThreadHelper :: forall ack. Maybe ack -> Process ack -> BusRef Atom TestBusMsg TestBusState -> ProcessM HelperMsg Unit
+testBusThreadHelper :: forall ack. Maybe ack -> Process ack -> BusRef Atom TestBusMsg TestBusState -> ProcessM (HelperMsg ack) Unit
 testBusThreadHelper ack parent localBusRef = do
   localBus <- receive >>= case _ of
     CreateBus initialState -> do
@@ -371,8 +394,9 @@ testBusThreadHelper ack parent localBusRef = do
         testBusThreadLoop localBus
       DeleteAndExit -> do
         liftEffect $ delete localBus
-      DeleteAndWait -> do
+      DeleteAndAck msg -> do
         liftEffect $ delete localBus
+        liftEffect $ parent ! msg
         testBusThreadLoop localBus
       ExitNormal -> do
         pure unit
