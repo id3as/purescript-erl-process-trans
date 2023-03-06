@@ -16,7 +16,7 @@ import Effect.Class.Console (log)
 import Erl.Atom (Atom, atom)
 import Erl.Process (Process, self, (!))
 import Erl.ProcessT (ProcessM, ProcessTM, Timeout(..), receive, receiveWithTimeout, spawn)
-import Erl.ProcessT.BusT.MetadataBusT (Bus, BusMsg(..), BusRef, MetadataBusT, busRef, create, delete, raise, subscribe, unsubscribe, updateMetadata)
+import Erl.ProcessT.BusT.MetadataBusT (Bus, BusMsg(..), BusRef, MetadataBusT, busRef, create, delete, raise, raise', subscribe, unsubscribe, updateMetadata)
 import Erl.Test.EUnit (TestF, suite)
 import Partial.Unsafe (unsafeCrashWith)
 import Test.Assert (assertEqual)
@@ -61,6 +61,7 @@ testMetadataBusT =
     testInitialMetadataCreateThenSubscribe
     testInitialMetadataAfterUpdates
     testMapMsg
+    testBeforeEachSend
     testUnsubscribe
     testMultipleBusses
     testSenderExits
@@ -79,13 +80,13 @@ testInitialMetadataSubscribeThenCreate =
     raiseBusMessage testBus
     receive >>= expect (Left (DataMsg (TestBusMsg)))
 
-    raiseBusState testBus (TestBusMetadata 1)
+    updateBusMetadata testBus (TestBusMetadata 1)
     receive >>= expect (Left (MetadataMsg (TestBusMetadata 1)))
 
     raiseBusMessage testBus
     receive >>= expect (Left (DataMsg (TestBusMsg)))
 
-    raiseBusState testBus (TestBusMetadata 0)
+    updateBusMetadata testBus (TestBusMetadata 0)
     receive >>= expect (Left (MetadataMsg (TestBusMetadata 0)))
 
     noMoreMessages
@@ -100,13 +101,13 @@ testInitialMetadataCreateThenSubscribe =
     testBus <- createTestBus
     subscribe testBusRef identity >>= (expect (Just (TestBusMetadata 0)))
 
-    raiseBusState testBus (TestBusMetadata 1)
+    updateBusMetadata testBus (TestBusMetadata 1)
     receive >>= expect (Left (MetadataMsg (TestBusMetadata 1)))
 
     raiseBusMessage testBus
     receive >>= expect (Left (DataMsg (TestBusMsg)))
 
-    raiseBusState testBus (TestBusMetadata 0)
+    updateBusMetadata testBus (TestBusMetadata 0)
     receive >>= expect (Left (MetadataMsg (TestBusMetadata 0)))
 
     raiseBusMessage testBus
@@ -125,7 +126,7 @@ testInitialMetadataAfterUpdates =
 
     raiseBusMessage testBus
 
-    raiseBusState testBus (TestBusMetadata 1)
+    updateBusMetadata testBus (TestBusMetadata 1)
 
     raiseBusMessage testBus
 
@@ -134,7 +135,7 @@ testInitialMetadataAfterUpdates =
     raiseBusMessage testBus
     receive >>= expect (Left (DataMsg (TestBusMsg)))
 
-    raiseBusState testBus (TestBusMetadata 2)
+    updateBusMetadata testBus (TestBusMetadata 2)
     receive >>= expect (Left (MetadataMsg (TestBusMetadata 2)))
 
     raiseBusMessage testBus
@@ -156,7 +157,7 @@ testMapMsg =
     raiseBusMessage testBus
     receive >>= expect (Left TestMappedMsg)
 
-    raiseBusState testBus (TestBusMetadata 2)
+    updateBusMetadata testBus (TestBusMetadata 2)
     receive >>= expect (Left (TestMappedMetadata 2))
 
     noMoreMessages
@@ -164,6 +165,44 @@ testMapMsg =
   mapper (MetadataMsg (TestBusMetadata i)) = TestMappedMetadata i
   mapper (DataMsg TestBusMsg) = TestMappedMsg
   mapper BusTerminated = TestMappedTerminated
+
+
+testBeforeEachSend :: Free TestF Unit
+testBeforeEachSend =
+  mpTest "If we have a beforeEachSend effect, it gets called" theTest
+  where
+
+  theTest :: MetadataBusT (BusMsg TestBusMsg TestBusMetadata) (ProcessTM _ _) Unit
+  theTest = do
+    me <- self
+    testBus <- createTestBus
+
+    -- First time, with nobody subscribed, we expect no message
+    liftEffect $ raise' testBus TestBusMsg {beforeEachSend: Just $ me ! TestBusMsg}
+
+    subscribe testBusRef identity >>= (expect (Just (TestBusMetadata 0)))
+
+    -- As we are subscribed, we now expect 2 messages - one from the bus, the other from the beforeEachSend
+    -- and the message sent with ! won't have the busMessage mappings applied
+    liftEffect $ raise' testBus TestBusMsg {beforeEachSend: Just $ me ! TestBusMsg}
+    receive >>= expect (Right TestBusMsg) -- the beforeEachSend message 
+    receive >>= expect (Left (DataMsg (TestBusMsg))) -- the bus message
+
+
+    -- A regular raise just gets the single message     
+    raiseBusMessage testBus
+    receive >>= expect (Left (DataMsg (TestBusMsg)))
+
+    updateBusMetadata testBus (TestBusMetadata 2)
+    receive >>= (expect (Left (MetadataMsg (TestBusMetadata 2))))
+
+    -- Should behave the same as the above after the metadata update
+    liftEffect $ raise' testBus TestBusMsg {beforeEachSend: Just $ me ! TestBusMsg}
+    receive >>= expect (Right TestBusMsg) -- the beforeEachSend message 
+    receive >>= expect (Left (DataMsg (TestBusMsg))) -- the bus message
+
+    noMoreMessages
+
 
 testUnsubscribe :: Free TestF Unit
 testUnsubscribe =
@@ -352,11 +391,11 @@ raiseBusMessage :: forall m. MonadEffect m => TestBus -> m Unit
 raiseBusMessage testBus = do
   liftEffect $ raise testBus TestBusMsg
 
-raiseBusState :: forall m. MonadEffect m => TestBus -> TestBusMetadata -> m Unit
-raiseBusState testBus m = do
+updateBusMetadata :: forall m. MonadEffect m => TestBus -> TestBusMetadata -> m Unit
+updateBusMetadata testBus m = do
   liftEffect $ updateMetadata testBus m
 
-createTestBus :: forall busMsg handledMsg. MetadataBusT busMsg (ProcessTM Void handledMsg) TestBus
+createTestBus :: forall busMsg handledMsg appMsg. MetadataBusT busMsg (ProcessTM appMsg handledMsg) TestBus
 createTestBus = liftEffect $ create testBusRef (TestBusMetadata 0)
 
 testBus2Thread :: (Bus Atom TestBusMsg TestBusMetadata -> Effect Unit) -> ProcessM Void Unit

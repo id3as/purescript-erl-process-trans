@@ -2,7 +2,7 @@
 
 -export([ createImpl/3
         , deleteImpl/2
-        , raiseImpl/2
+        , raisePrimeImpl/3
         , updateMetadataImpl/2
         , subscribeImpl/1
         , monitorImpl/2
@@ -10,6 +10,8 @@
         , unsubscribeImpl/2
         , parseBusMsg/1
         ]).
+
+-include_lib("gproc/src/gproc_int.hrl").
 
 -define(left(X), {left, X}).
 -define(right(X), {right, X}).
@@ -33,7 +35,7 @@ createImpl(BusName, Generation, InitialMetadata) ->
   fun() ->
       NameKey = ?gprocNameKey(BusName),
       gproc:reg(NameKey, undefined, [?metadataAttribute(Generation, InitialMetadata)]),
-      raiseMsgInt(BusName, #metadataMsgInternal{generation = Generation, msg = InitialMetadata}),
+      raiseMsgInt(BusName, #metadataMsgInternal{generation = Generation, msg = InitialMetadata}, ?nothing),
       BusName
   end.
 
@@ -42,18 +44,15 @@ deleteImpl(BusName, TerminatedMsg) ->
       NameKey = ?gprocNameKey(BusName),
       {{Id, Generation}, _Metadata} = gproc:get_attribute(NameKey, ?metadataTag),
       gproc:unreg(?gprocNameKey(BusName)),
-      raiseMsgInt(BusName, TerminatedMsg({Id, Generation + 1})),
+      raiseMsgInt(BusName, TerminatedMsg({Id, Generation + 1}), ?nothing),
       ?unit
   end.
 
-raiseMsgInt(BusName, Msg) ->
-  gproc:send(?gprocPropertyKey(BusName), {?msgTag, BusName, Msg, self()}).
-
-raiseImpl(BusName, Msg) ->
+raisePrimeImpl(BusName, Msg, #{beforeEachSend := BeforeEachSend}) ->
   fun() ->
     NameKey = ?gprocNameKey(BusName),
     {{Id, Generation}, _} = gproc:get_attribute(NameKey, ?metadataTag),
-    raiseMsgInt(BusName, #dataMsgInternal{generation = {Id, Generation}, msg = Msg})
+    raiseMsgInt(BusName, #dataMsgInternal{generation = {Id, Generation}, msg = Msg}, BeforeEachSend)
   end.
 
 updateMetadataImpl(BusName, NewMetadata) ->
@@ -62,7 +61,7 @@ updateMetadataImpl(BusName, NewMetadata) ->
     {{Id, Generation}, _} = gproc:get_attribute(NameKey, ?metadataTag),
     NewGeneration = {Id, Generation + 1},
     gproc:set_attributes(NameKey, [?metadataAttribute(NewGeneration, NewMetadata)]),
-    raiseMsgInt(BusName, #metadataMsgInternal{generation = NewGeneration, msg = NewMetadata})
+    raiseMsgInt(BusName, #metadataMsgInternal{generation = NewGeneration, msg = NewMetadata}, ?nothing)
   end.
 
 subscribeImpl(BusName) ->
@@ -89,6 +88,36 @@ monitorImpl(Pid, BusName) ->
 
 demonitorImpl(Ref) ->
   fun () -> erlang:demonitor(Ref, [flush]) end.
+
+
+%%------------------------------------------------------------------------------
+%% raiseMsgInt and groc_send1 are slight variants of send and send1 
+%% from gproc.erl - but call the passed function before each message send
+%%------------------------------------------------------------------------------
+raiseMsgInt(BusName, Msg, BeforeEachSend) ->
+  gproc_send1(?gprocPropertyKey(BusName), {?msgTag, BusName, Msg, self()}, BeforeEachSend).
+
+%%------------------------------------------------------------------------------
+%% gproc_send1 is a slight variant of send in gproc.erl, adding in support for 
+%% an optional side effect prior to each message send (for example to reference count) 
+%%------------------------------------------------------------------------------
+gproc_send1({T,C,_} = Key, Msg, MaybeSideEffect) when C==l; C==g ->
+    if T==p orelse T==c orelse T==r ->
+            lists:foreach(fun(Pid) ->
+                                  maybe_run(MaybeSideEffect),
+                                  Pid ! Msg
+                          end, gproc:lookup_pids(Key)),
+            Msg;
+       true ->
+            erlang:error(badarg)
+    end;
+gproc_send1(_, _, _) ->
+    ?THROW_GPROC_ERROR(badarg).
+
+
+maybe_run(?nothing) -> ok;
+maybe_run(?just(SideEffect)) ->
+  SideEffect().
 
 
 % sender exits

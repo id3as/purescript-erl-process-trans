@@ -1,12 +1,14 @@
 module Erl.ProcessT.BusT.MetadataBusT
-  ( MetadataBusT
-  , MetadataBusInternal
+  ( MetadataBusInternal
+  , MetadataBusT
   , create
   , delete
-  , raise
-  , updateMetadata
   , module ReExports
-  ) where
+  , raise
+  , raise'
+  , updateMetadata
+  )
+  where
 
 import Prelude
 
@@ -33,6 +35,10 @@ import Foreign (Foreign)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
+
+type RaiseConfig  = {
+  beforeEachSend :: Maybe (Effect Unit)
+}
 newtype Generation = Generation (Tuple2 MonotonicTime Int)
 
 derive newtype instance Eq Generation
@@ -94,9 +100,13 @@ delete :: forall name msg metadata. Bus name msg metadata -> Effect Unit
 delete busName = deleteImpl busName BusTerminatedInternal
 
 raise :: forall name msg metadata. Bus name msg metadata -> msg -> Effect Unit
-raise = raiseImpl
+raise bus msg = raisePrimeImpl bus msg {beforeEachSend: Nothing}
 
-foreign import raiseImpl :: forall name msg metadata. Bus name msg metadata -> msg -> Effect Unit
+raise' :: forall name msg metadata. Bus name msg metadata -> msg -> RaiseConfig -> Effect Unit
+raise' = raisePrimeImpl
+
+foreign import raisePrimeImpl :: forall name msg metadata. Bus name msg metadata -> msg -> RaiseConfig -> Effect Unit
+
 
 updateMetadata :: forall name msg metadata. Bus name msg metadata -> metadata -> Effect Unit
 updateMetadata = updateMetadataImpl
