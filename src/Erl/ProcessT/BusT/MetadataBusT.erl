@@ -11,7 +11,18 @@
         , parseBusMsg/1
         ]).
 
--include_lib("gproc/src/gproc_int.hrl").
+%% -include_lib("gproc/src/gproc_int.hrl").
+%% start of inlined #defines inlined from the above as build envs were proving challenging...
+-define(CATCH_GPROC_ERROR(Expr, Args),
+	try Expr
+	catch
+	    throw:?GPROC_THROW(GprocError) ->
+		erlang:error(GprocError, Args)
+	end).
+
+-define(GPROC_THROW(E), {gproc_error, E}).
+-define(THROW_GPROC_ERROR(E), throw(?GPROC_THROW(E))).
+%% end of inlined #defines inlined from gproc_int.hrl
 
 -define(left(X), {left, X}).
 -define(right(X), {right, X}).
