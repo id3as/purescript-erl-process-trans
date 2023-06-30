@@ -115,7 +115,7 @@ raiseMsgInt(BusName, Msg, BeforeEachSend) ->
 gproc_send1({T,C,_} = Key, Msg, MaybeSideEffect) when C==l; C==g ->
     if T==p orelse T==c orelse T==r ->
             lists:foreach(fun(Pid) ->
-                                  maybe_run(MaybeSideEffect),
+                                  maybe_run(MaybeSideEffect, Pid),
                                   Pid ! Msg
                           end, gproc:lookup_pids(Key)),
             Msg;
@@ -126,9 +126,9 @@ gproc_send1(_, _, _) ->
     ?THROW_GPROC_ERROR(badarg).
 
 
-maybe_run(?nothing) -> ok;
-maybe_run(?just(SideEffect)) ->
-  SideEffect().
+maybe_run(?nothing, _) -> ok;
+maybe_run(?just(SideEffect), Pid) ->
+  SideEffect(Pid).
 
 
 % sender exits

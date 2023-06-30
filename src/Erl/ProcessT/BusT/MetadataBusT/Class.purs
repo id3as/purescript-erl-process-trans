@@ -8,6 +8,7 @@ import Control.Monad.State (StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT)
 import Data.Maybe (Maybe)
+import Effect (Effect)
 import Effect.Class (class MonadEffect)
 
 newtype Bus :: Type -> Type -> Type -> Type
@@ -42,6 +43,7 @@ class MonadEffect m <= MetadataBusM msgOut m | m -> msgOut where
     :: forall name busMsgIn busMetadataIn
      . BusRef name busMsgIn busMetadataIn
     -> (BusMsg busMsgIn busMetadataIn -> msgOut)
+    -> Maybe (Effect Unit)
     -> m (Maybe busMetadataIn)
 
   unsubscribe
@@ -50,17 +52,17 @@ class MonadEffect m <= MetadataBusM msgOut m | m -> msgOut where
     -> m Unit
 
 instance MetadataBusM msgOut m => MetadataBusM msgOut (IdentityT m) where
-  subscribe ref mapper = lift (subscribe ref mapper)
+  subscribe ref mapper afterEachReceive = lift (subscribe ref mapper afterEachReceive)
   unsubscribe ref = lift (unsubscribe ref)
 
 instance MetadataBusM msgOut m => MetadataBusM msgOut (StateT s m) where
-  subscribe ref mapper = lift (subscribe ref mapper)
+  subscribe ref mapper afterEachReceive = lift (subscribe ref mapper afterEachReceive)
   unsubscribe ref = lift (unsubscribe ref)
 
 instance MetadataBusM msgOut m => MetadataBusM msgOut (ReaderT r m) where
-  subscribe ref mapper = lift (subscribe ref mapper)
+  subscribe ref mapper afterEachReceive = lift (subscribe ref mapper afterEachReceive)
   unsubscribe ref = lift (unsubscribe ref)
 
 instance (Monoid w, MetadataBusM msgOut m) => MetadataBusM msgOut (WriterT w m) where
-  subscribe ref mapper = lift (subscribe ref mapper)
+  subscribe ref mapper afterEachReceive = lift (subscribe ref mapper afterEachReceive)
   unsubscribe ref = lift (unsubscribe ref)

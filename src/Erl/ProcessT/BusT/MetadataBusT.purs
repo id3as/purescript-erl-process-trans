@@ -7,8 +7,7 @@ module Erl.ProcessT.BusT.MetadataBusT
   , raise
   , raise'
   , updateMetadata
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -19,11 +18,13 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Uncurried (EffectFn1)
 import Erl.Data.Map (Map)
 import Erl.Data.Map as Map
 import Erl.Data.Tuple (Tuple2, Tuple3, tuple2, uncurry2, uncurry3)
 import Erl.Kernel.Erlang (monotonicTime)
 import Erl.Process (class HasSelf, self)
+import Erl.Process.Raw (Pid)
 import Erl.ProcessT.BusT.Class (class BusM)
 import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM, Bus(..), BusMsg(..), BusRef(..), busRef, subscribe, unsubscribe) as ReExports
 import Erl.ProcessT.BusT.MetadataBusT.Class (class MetadataBusM, Bus, BusMsg(..), BusRef(..))
@@ -35,10 +36,10 @@ import Foreign (Foreign)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
+type RaiseConfig =
+  { beforeEachSend :: Maybe (EffectFn1 Pid Unit)
+  }
 
-type RaiseConfig  = {
-  beforeEachSend :: Maybe (Effect Unit)
-}
 newtype Generation = Generation (Tuple2 MonotonicTime Int)
 
 derive newtype instance Eq Generation
@@ -66,6 +67,7 @@ newtype MetadataBusInternal msg = MetadataBusInternal
       { generation :: Maybe Generation
       , monitorRef :: Maybe MetadataBusMonitorRef
       , mapper :: BusMsg BusDataForeign BusMetadataForeign -> msg
+      , afterEachReceive :: Maybe (Effect Unit)
       }
   )
 
@@ -100,13 +102,12 @@ delete :: forall name msg metadata. Bus name msg metadata -> Effect Unit
 delete busName = deleteImpl busName BusTerminatedInternal
 
 raise :: forall name msg metadata. Bus name msg metadata -> msg -> Effect Unit
-raise bus msg = raisePrimeImpl bus msg {beforeEachSend: Nothing}
+raise bus msg = raisePrimeImpl bus msg { beforeEachSend: Nothing }
 
 raise' :: forall name msg metadata. Bus name msg metadata -> msg -> RaiseConfig -> Effect Unit
 raise' = raisePrimeImpl
 
 foreign import raisePrimeImpl :: forall name msg metadata. Bus name msg metadata -> msg -> RaiseConfig -> Effect Unit
-
 
 updateMetadata :: forall name msg metadata. Bus name msg metadata -> metadata -> Effect Unit
 updateMetadata = updateMetadataImpl
@@ -129,16 +130,17 @@ instance MonadEffect m => MetadataBusM msgOut (MetadataBusT msgOut m) where
     :: forall name busMsgIn busMetadataIn
      . BusRef name busMsgIn busMetadataIn
     -> (BusMsg busMsgIn busMetadataIn -> msgOut)
+    -> Maybe (Effect Unit)
     -> MetadataBusT msgOut m (Maybe busMetadataIn)
-  subscribe bus mapper =
+  subscribe bus mapper afterEachReceive =
     MetadataBusT do
       resp <- liftEffect $ subscribeImpl bus
       case resp of
         Nothing -> do
-          modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Nothing, monitorRef: Nothing } mm)
+          modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Nothing, monitorRef: Nothing, afterEachReceive } mm)
           pure Nothing
         Just genMetadataPidRef -> genMetadataPidRef # uncurry3 \gen metadata ref -> do
-          modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Just gen, monitorRef: Just ref } mm)
+          modify_ \(MetadataBusInternal mm) -> MetadataBusInternal (Map.insert (toBusNameForeign bus) { mapper: toMapperForeign mapper, generation: Just gen, monitorRef: Just ref, afterEachReceive } mm)
           pure $ Just $ metadata
 
   unsubscribe
@@ -189,6 +191,12 @@ toBusMsg currentGeneration busMsgInternal =
         | otherwise ->
             Nothing
 
+maybeAfterEachReceive :: forall msg metadata. Maybe (Effect Unit) -> BusMsgInternal msg metadata -> Effect Unit
+maybeAfterEachReceive Nothing _ = pure unit
+maybeAfterEachReceive (Just fn) (MetadataMsgInternal _ _) = pure unit
+maybeAfterEachReceive (Just fn) (DataMsgInternal _ _) = fn
+maybeAfterEachReceive _ (BusTerminatedInternal _) = pure unit
+
 instance
   MonadProcessTrans m innerMetadata appMsg innerOutMsg =>
   MonadProcessTrans (MetadataBusT msgOut m) (Tuple (MetadataBusInternal msgOut) innerMetadata) appMsg (Either msgOut innerOutMsg) where
@@ -200,7 +208,8 @@ instance
           case Map.lookup busName mtMetadata of
             Nothing -> do
               pure Nothing
-            Just { generation, mapper, monitorRef: maybeMonitorRef } -> do
+            Just { generation, mapper, monitorRef: maybeMonitorRef, afterEachReceive } -> do
+              liftEffect $ maybeAfterEachReceive afterEachReceive busMsgInternal
               case toBusMsg generation busMsgInternal of
                 Nothing -> do
                   pure Nothing
@@ -214,7 +223,7 @@ instance
                   monitorRef <- case maybeMonitorRef of
                     Just monitorRef -> pure monitorRef
                     Nothing -> liftEffect $ monitorImpl busPid busName
-                  put $ MetadataBusInternal $ Map.insert busName { generation: Just newGeneration, mapper, monitorRef: Just monitorRef } mtMetadata
+                  put $ MetadataBusInternal $ Map.insert busName { generation: Just newGeneration, mapper, monitorRef: Just monitorRef, afterEachReceive } mtMetadata
                   pure $ Just $ Left $ mapper busMsg
       Just (Right busName) -> do
         MetadataBusInternal mtMetadata <- get
